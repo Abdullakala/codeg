@@ -1123,6 +1123,7 @@
         "askAnything": "Ask anything...",
         "removeAttachmentAria": "Remove {name}",
         "attachFiles": "Attach files",
+        "dropFilesToAttach": "Drop files to attach",
         "loadingSettings": "Loading settings...",
         "loadingMode": "Loading mode...",
         "cancel": "Cancel",

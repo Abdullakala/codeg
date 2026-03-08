@@ -501,20 +501,49 @@ impl CodexParser {
                                     .unwrap_or("")
                                     .to_string();
                                 let normalized = strip_blocked_resource_mentions(&text);
-                                let message_text = if normalized.is_empty() {
-                                    "Attached resources".to_string()
-                                } else {
-                                    normalized
-                                };
+                                let mut blocks: Vec<ContentBlock> = Vec::new();
+                                if !normalized.is_empty() {
+                                    blocks.push(ContentBlock::Text { text: normalized });
+                                }
+
+                                if let Some(images) =
+                                    payload.get("images").and_then(|v| v.as_array())
+                                {
+                                    for image in images {
+                                        let Some(raw) = image.as_str() else {
+                                            continue;
+                                        };
+                                        let Some((mime_type, data)) = parse_data_uri_image(raw)
+                                        else {
+                                            continue;
+                                        };
+                                        blocks.push(ContentBlock::Image {
+                                            data,
+                                            mime_type,
+                                            uri: None,
+                                        });
+                                    }
+                                }
+
+                                if blocks.is_empty() {
+                                    blocks.push(ContentBlock::Text {
+                                        text: "Attached resources".to_string(),
+                                    });
+                                }
 
                                 if title.is_none() {
                                     title = extract_codex_title_candidate(&text, true);
                                 }
 
+                                if should_skip_duplicate_user_message(&messages, &blocks, timestamp)
+                                {
+                                    continue;
+                                }
+
                                 messages.push(UnifiedMessage {
                                     id: format!("user-{}", messages.len()),
                                     role: MessageRole::User,
-                                    content: vec![ContentBlock::Text { text: message_text }],
+                                    content: blocks,
                                     timestamp,
                                     usage: None,
                                     duration_ms: None,
@@ -689,6 +718,40 @@ impl CodexParser {
                                     duration_ms: None,
                                     model: None,
                                 });
+                            }
+                            "message" => {
+                                let role =
+                                    payload.get("role").and_then(|r| r.as_str()).unwrap_or("");
+                                if role == "user" {
+                                    if let Some(blocks) =
+                                        extract_response_item_user_image_blocks(payload)
+                                    {
+                                        if should_skip_duplicate_user_message(
+                                            &messages, &blocks, timestamp,
+                                        ) {
+                                            continue;
+                                        }
+
+                                        if title.is_none() {
+                                            if let Some(text) = first_text_block(&blocks) {
+                                                title = extract_codex_title_candidate(
+                                                    text.as_str(),
+                                                    true,
+                                                );
+                                            }
+                                        }
+
+                                        messages.push(UnifiedMessage {
+                                            id: format!("user-{}", messages.len()),
+                                            role: MessageRole::User,
+                                            content: blocks,
+                                            timestamp,
+                                            usage: None,
+                                            duration_ms: None,
+                                            model: None,
+                                        });
+                                    }
+                                }
                             }
                             _ => {}
                         }
@@ -946,10 +1009,138 @@ fn extract_codex_text_content(payload: &serde_json::Value) -> Option<String> {
     None
 }
 
+fn parse_data_uri_image(raw: &str) -> Option<(String, String)> {
+    let trimmed = raw.trim();
+    if !trimmed.starts_with("data:") {
+        return None;
+    }
+    let marker = ";base64,";
+    let marker_idx = trimmed.find(marker)?;
+    let mime_type = trimmed.get(5..marker_idx)?.trim();
+    if !mime_type.starts_with("image/") {
+        return None;
+    }
+    let data = trimmed.get(marker_idx + marker.len()..)?.trim();
+    if data.is_empty() {
+        return None;
+    }
+    Some((mime_type.to_string(), data.to_string()))
+}
+
+fn parse_input_image_data_uri(item: &serde_json::Value) -> Option<(String, String)> {
+    let data_uri = item
+        .get("image_url")
+        .and_then(|v| v.as_str())
+        .or_else(|| {
+            item.get("image_url")
+                .and_then(|v| v.get("url"))
+                .and_then(|v| v.as_str())
+        })
+        .or_else(|| item.get("url").and_then(|v| v.as_str()))?;
+    parse_data_uri_image(data_uri)
+}
+
+fn first_text_block(blocks: &[ContentBlock]) -> Option<String> {
+    blocks.iter().find_map(|block| match block {
+        ContentBlock::Text { text } => Some(text.clone()),
+        _ => None,
+    })
+}
+
+fn blocks_equal(a: &[ContentBlock], b: &[ContentBlock]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    serde_json::to_value(a).ok() == serde_json::to_value(b).ok()
+}
+
+fn should_skip_duplicate_user_message(
+    messages: &[UnifiedMessage],
+    blocks: &[ContentBlock],
+    timestamp: DateTime<Utc>,
+) -> bool {
+    // Some Codex logs emit the same user message through both `response_item`
+    // and `event_msg`, sometimes with a non-trivial delay. Deduplicate by
+    // content in a bounded recent time window.
+    const DUP_WINDOW_MS: i64 = 120_000;
+
+    for msg in messages.iter().rev() {
+        if !matches!(msg.role, MessageRole::User) {
+            continue;
+        }
+        let delta_ms = (timestamp - msg.timestamp).num_milliseconds().abs();
+        if delta_ms > DUP_WINDOW_MS {
+            break;
+        }
+        if blocks_equal(&msg.content, blocks) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn extract_response_item_user_image_blocks(
+    payload: &serde_json::Value,
+) -> Option<Vec<ContentBlock>> {
+    let content = payload.get("content")?.as_array()?;
+    let mut blocks: Vec<ContentBlock> = Vec::new();
+    let mut text_parts: Vec<String> = Vec::new();
+    let mut has_input_image = false;
+
+    for item in content {
+        let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        match item_type {
+            "input_text" => {
+                let Some(text) = item.get("text").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                if text.trim() == "<image>" {
+                    continue;
+                }
+                if !text.is_empty() {
+                    text_parts.push(text.to_string());
+                }
+            }
+            "input_image" => {
+                has_input_image = true;
+                let Some((mime_type, data)) = parse_input_image_data_uri(item) else {
+                    continue;
+                };
+                blocks.push(ContentBlock::Image {
+                    data,
+                    mime_type,
+                    uri: None,
+                });
+            }
+            _ => {}
+        }
+    }
+
+    if !has_input_image {
+        return None;
+    }
+
+    let text = strip_blocked_resource_mentions(&text_parts.join("\n"));
+    if !text.is_empty() {
+        blocks.insert(0, ContentBlock::Text { text });
+    }
+
+    if blocks.is_empty() {
+        blocks.push(ContentBlock::Text {
+            text: "Attached resources".to_string(),
+        });
+    }
+
+    Some(blocks)
+}
+
 fn strip_blocked_resource_mentions(input: &str) -> String {
     let blocked_re = Regex::new(r"@([^\s@]+)\s*\[blocked[^\]]*\]").expect("valid blocked regex");
+    let image_tag_re = Regex::new(r"(?i)</?image\s*/?>").expect("valid image tag regex");
     let collapsed_ws_re = Regex::new(r"[ \t]{2,}").expect("valid whitespace regex");
     let text = blocked_re.replace_all(input, "").to_string();
+    let text = image_tag_re.replace_all(&text, "").to_string();
     let text = collapsed_ws_re.replace_all(&text, " ").to_string();
     text.trim().to_string()
 }
@@ -1030,12 +1221,16 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
 mod tests {
     use super::extract_codex_title_candidate;
     use super::extract_context_window_used_tokens_from_token_count_info;
+    use super::extract_response_item_user_image_blocks;
     use super::extract_turn_usage_from_codex_usage;
     use super::merge_codex_context_window_stats;
     use super::merge_codex_total_usage_stats;
     use super::resolve_codex_home_dir_from;
+    use super::should_skip_duplicate_user_message;
+    use super::strip_blocked_resource_mentions;
     use super::CodexParser;
-    use crate::models::{SessionStats, TurnUsage};
+    use crate::models::{ContentBlock, MessageRole, SessionStats, TurnUsage, UnifiedMessage};
+    use chrono::{Duration, Utc};
     use std::env;
     use std::fs;
     use std::path::PathBuf;
@@ -1061,6 +1256,75 @@ mod tests {
         let input = "修复 codex 会话标题";
         let got = extract_codex_title_candidate(input, true);
         assert_eq!(got.as_deref(), Some("修复 codex 会话标题"));
+    }
+
+    #[test]
+    fn strips_image_placeholders_from_user_text() {
+        let input = "这个图片里面是什么\n</image>\n<image>\n";
+        let got = strip_blocked_resource_mentions(input);
+        assert_eq!(got, "这个图片里面是什么");
+    }
+
+    #[test]
+    fn extracts_response_item_input_image_blocks() {
+        let payload = serde_json::json!({
+            "content": [
+                {"type": "input_text", "text": "这是什么东西"},
+                {"type": "input_text", "text": "<image>"},
+                {"type": "input_image", "image_url": "data:image/png;base64,QUJD"}
+            ]
+        });
+
+        let blocks = extract_response_item_user_image_blocks(&payload).expect("blocks");
+        assert_eq!(blocks.len(), 2);
+        match &blocks[0] {
+            ContentBlock::Text { text } => assert_eq!(text, "这是什么东西"),
+            _ => panic!("expected text block"),
+        }
+        match &blocks[1] {
+            ContentBlock::Image {
+                data, mime_type, ..
+            } => {
+                assert_eq!(mime_type, "image/png");
+                assert_eq!(data, "QUJD");
+            }
+            _ => panic!("expected image block"),
+        }
+    }
+
+    #[test]
+    fn skips_duplicate_user_message_within_short_window() {
+        let now = Utc::now();
+        let blocks = vec![
+            ContentBlock::Text {
+                text: "hello".to_string(),
+            },
+            ContentBlock::Image {
+                data: "QUJD".to_string(),
+                mime_type: "image/png".to_string(),
+                uri: None,
+            },
+        ];
+        let messages = vec![UnifiedMessage {
+            id: "user-0".to_string(),
+            role: MessageRole::User,
+            content: blocks.clone(),
+            timestamp: now,
+            usage: None,
+            duration_ms: None,
+            model: None,
+        }];
+
+        assert!(should_skip_duplicate_user_message(
+            &messages,
+            &blocks,
+            now + Duration::milliseconds(1200),
+        ));
+        assert!(!should_skip_duplicate_user_message(
+            &messages,
+            &blocks,
+            now + Duration::seconds(180),
+        ));
     }
 
     #[test]

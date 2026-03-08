@@ -43,6 +43,13 @@ export interface UserResourceDisplay {
   mime_type?: string | null
 }
 
+export interface UserImageDisplay {
+  name: string
+  data: string
+  mime_type: string
+  uri?: string | null
+}
+
 const BLOCKED_RESOURCE_MENTION_RE = /@([^\s@]+)\s*\[blocked[^\]]*\]/gi
 const MARKDOWN_LINK_RE = /\[([^\]]+)\]\(([^)]+)\)/g
 
@@ -54,6 +61,7 @@ export interface AdaptedMessage {
   role: MessageRole
   content: AdaptedContentPart[]
   userResources?: UserResourceDisplay[]
+  userImages?: UserImageDisplay[]
   timestamp: string
   usage?: TurnUsage | null
   duration_ms?: number | null
@@ -398,6 +406,20 @@ function addResource(
   resources.push(resource)
 }
 
+function addImage(images: UserImageDisplay[], image: UserImageDisplay) {
+  const key = `${image.mime_type}:${image.data.length}:${image.data.slice(0, 64)}`
+  if (
+    images.some(
+      (item) =>
+        `${item.mime_type}:${item.data.length}:${item.data.slice(0, 64)}` ===
+        key
+    )
+  ) {
+    return
+  }
+  images.push(image)
+}
+
 export function extractUserResourcesFromText(text: string): {
   text: string
   resources: UserResourceDisplay[]
@@ -478,6 +500,33 @@ function splitUserTextAndResources(
   }
 
   return { parts: nextParts, resources }
+}
+
+function deriveImageNameFromBlock(
+  block: Extract<ContentBlock, { type: "image" }>
+): string {
+  if (block.uri && block.uri.trim().length > 0) {
+    return fileNameFromUri(block.uri)
+  }
+  const ext = block.mime_type.split("/")[1]?.split("+")[0] ?? "image"
+  return `image.${ext}`
+}
+
+function extractUserImagesFromBlocks(
+  blocks: ContentBlock[]
+): UserImageDisplay[] {
+  const images: UserImageDisplay[] = []
+  for (const block of blocks) {
+    if (block.type !== "image") continue
+    if (!block.data || !block.mime_type) continue
+    addImage(images, {
+      name: deriveImageNameFromBlock(block),
+      data: block.data,
+      mime_type: block.mime_type,
+      uri: block.uri ?? null,
+    })
+  }
+  return images
 }
 
 /**
@@ -661,6 +710,8 @@ export function adaptMessageTurn(
     turn.role === "user"
       ? splitUserTextAndResources(adaptedContent, text.attachedResources)
       : { parts: adaptedContent, resources: [] as UserResourceDisplay[] }
+  const userImages =
+    turn.role === "user" ? extractUserImagesFromBlocks(turn.blocks) : []
 
   return {
     id: turn.id,
@@ -668,6 +719,7 @@ export function adaptMessageTurn(
     content: userSplit.parts,
     userResources:
       userSplit.resources.length > 0 ? userSplit.resources : undefined,
+    userImages: userImages.length > 0 ? userImages : undefined,
     timestamp: turn.timestamp,
     usage: turn.usage,
     duration_ms: turn.duration_ms,
@@ -695,6 +747,7 @@ export interface MessageGroup {
   role: "user" | "assistant" | "system"
   parts: AdaptedContentPart[]
   userResources?: UserResourceDisplay[]
+  userImages?: UserImageDisplay[]
   usage?: TurnUsage | null
   duration_ms?: number | null
   model?: string | null
@@ -738,6 +791,7 @@ export function groupAdaptedMessages(
         role: effectiveRole,
         parts: [...msg.content],
         userResources: msg.userResources,
+        userImages: msg.userImages,
       })
     } else {
       if (currentGroup && currentGroup.role === "assistant") {

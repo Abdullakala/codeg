@@ -1,14 +1,18 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { getCurrentWebview } from "@tauri-apps/api/webview"
 import { open } from "@tauri-apps/plugin-dialog"
+import Image from "next/image"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { FileSearch, Plus, Send, Square, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { readFileBase64 } from "@/lib/tauri"
 import type {
   AvailableCommandInfo,
+  PromptCapabilitiesInfo,
   PromptDraft,
   PromptInputBlock,
   SessionConfigOptionInfo,
@@ -45,16 +49,32 @@ interface MessageInputProps {
   onModeChange?: (modeId: string) => void
   onConfigOptionChange?: (configId: string, valueId: string) => void
   availableCommands?: AvailableCommandInfo[] | null
+  promptCapabilities: PromptCapabilitiesInfo
   attachmentTabId?: string | null
   draftStorageKey?: string | null
 }
 
-interface InputAttachment {
-  path: string
+interface ResourceInputAttachment {
+  id: string
+  type: "resource"
+  kind: "link" | "embedded"
   uri: string
   name: string
   mimeType: string | null
+  text?: string | null
+  blob?: string | null
 }
+
+interface ImageInputAttachment {
+  id: string
+  type: "image"
+  data: string
+  uri: string | null
+  name: string
+  mimeType: string
+}
+
+type InputAttachment = ResourceInputAttachment | ImageInputAttachment
 
 const MIME_BY_EXT: Record<string, string> = {
   txt: "text/plain",
@@ -104,6 +124,102 @@ function toFileUri(path: string): string {
   return `file:///${encoded}`
 }
 
+function hasDragFiles(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer?.types) return false
+  return Array.from(dataTransfer.types).includes("Files")
+}
+
+function pointWithinElement(
+  position: { x: number; y: number },
+  element: HTMLElement
+): boolean {
+  const rect = element.getBoundingClientRect()
+  const dpr = window.devicePixelRatio || 1
+  const candidates = [
+    { x: position.x, y: position.y },
+    { x: position.x / dpr, y: position.y / dpr },
+  ]
+  return candidates.some(
+    (point) =>
+      point.x >= rect.left &&
+      point.x <= rect.right &&
+      point.y >= rect.top &&
+      point.y <= rect.bottom
+  )
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("Failed to read blob"))
+    }
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("Unexpected non-string blob reader result"))
+        return
+      }
+      const markerIndex = reader.result.indexOf(",")
+      resolve(
+        markerIndex >= 0 ? reader.result.slice(markerIndex + 1) : reader.result
+      )
+    }
+    reader.readAsDataURL(blob)
+  })
+}
+
+function getFilePath(file: File): string | null {
+  const withPath = file as File & { path?: string; webkitRelativePath?: string }
+  if (typeof withPath.path === "string" && withPath.path.trim().length > 0) {
+    return withPath.path
+  }
+  if (
+    typeof withPath.webkitRelativePath === "string" &&
+    withPath.webkitRelativePath.trim().length > 0
+  ) {
+    return withPath.webkitRelativePath
+  }
+  return null
+}
+
+const TEXT_LIKE_MIME_PREFIXES = [
+  "text/",
+  "application/json",
+  "application/xml",
+  "application/yaml",
+  "application/x-yaml",
+  "application/toml",
+  "application/javascript",
+  "application/typescript",
+]
+const DRAG_DROP_IMAGE_MAX_BYTES = 20_000_000
+
+function isTextLikeFile(file: File): boolean {
+  const mime = file.type.toLowerCase()
+  if (mime) {
+    if (TEXT_LIKE_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix))) {
+      return true
+    }
+  }
+  const ext = file.name.split(".").pop()?.toLowerCase()
+  if (!ext) return false
+  return Boolean(
+    MIME_BY_EXT[ext]?.startsWith("text/") ||
+    ["json", "yaml", "yml", "xml", "toml", "md", "csv"].includes(ext)
+  )
+}
+
+function buildClipboardResourceUri(name: string): string {
+  const normalizedName = name.trim() || "clipboard-resource"
+  return `clipboard://${encodeURIComponent(normalizedName)}-${crypto.randomUUID()}`
+}
+
+function buildDataUri(base64Data: string, mimeType: string | null): string {
+  const safeMime =
+    mimeType && mimeType.trim() ? mimeType : "application/octet-stream"
+  return `data:${safeMime};base64,${base64Data}`
+}
+
 function SelectorLoadingChip({ label }: { label: string }) {
   return (
     <div className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] text-muted-foreground">
@@ -131,6 +247,7 @@ export function MessageInput({
   onModeChange,
   onConfigOptionChange,
   availableCommands,
+  promptCapabilities,
   attachmentTabId,
   draftStorageKey,
 }: MessageInputProps) {
@@ -142,8 +259,12 @@ export function MessageInput({
     return loadMessageInputDraft(effectiveDraftStorageKey) ?? ""
   })
   const [attachments, setAttachments] = useState<InputAttachment[]>([])
+  const [isDragActive, setIsDragActive] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const lastDomDropAtRef = useRef(0)
   const composingRef = useRef(false)
   const textRef = useRef(text)
+  const canAttachImages = promptCapabilities.image
 
   useEffect(() => {
     textRef.current = text
@@ -176,6 +297,22 @@ export function MessageInput({
     hasModes && Boolean(effectiveModeId) && !hasConfigOptions
   const showModeLoading = modeLoading && !hasConfigOptions && !showModeSelector
   const showConfigLoading = configOptionsLoading && !hasConfigOptions
+  const imageAttachments = useMemo(
+    () =>
+      attachments.filter(
+        (attachment): attachment is ImageInputAttachment =>
+          attachment.type === "image"
+      ),
+    [attachments]
+  )
+  const resourceAttachments = useMemo(
+    () =>
+      attachments.filter(
+        (attachment): attachment is ResourceInputAttachment =>
+          attachment.type === "resource"
+      ),
+    [attachments]
+  )
   const hasAttachments = attachments.length > 0
   const hasSendableContent = text.trim().length > 0 || hasAttachments
 
@@ -196,23 +333,291 @@ export function MessageInput({
     )
   }, [slashMenuOpen, slashCommands, text])
 
-  const appendAttachments = useCallback((paths: string[]) => {
-    setAttachments((prev) => {
-      const seen = new Set(prev.map((item) => item.path))
-      const next = [...prev]
-      for (const path of paths) {
-        if (typeof path !== "string" || !path || seen.has(path)) continue
-        seen.add(path)
-        next.push({
-          path,
-          uri: toFileUri(path),
-          name: fileNameFromPath(path),
-          mimeType: mimeTypeFromPath(path),
+  const appendResourceLinks = useCallback(
+    (
+      links: Array<{
+        uri: string
+        name: string
+        mimeType: string | null
+        dedupeKey: string
+      }>
+    ) => {
+      if (links.length === 0) return
+      setAttachments((prev) => {
+        const seen = new Set(
+          prev.flatMap((item) =>
+            item.type === "resource" && item.kind === "link" ? [item.uri] : []
+          )
+        )
+        const next = [...prev]
+        for (const link of links) {
+          if (!link.uri || seen.has(link.dedupeKey)) continue
+          seen.add(link.dedupeKey)
+          next.push({
+            id: `resource-link:${link.dedupeKey}`,
+            type: "resource",
+            kind: "link",
+            uri: link.uri,
+            name: link.name,
+            mimeType: link.mimeType,
+          })
+        }
+        return next
+      })
+    },
+    []
+  )
+
+  const appendResourceAttachments = useCallback(
+    (paths: string[]) => {
+      const normalized = paths
+        .filter(
+          (path): path is string => typeof path === "string" && path.length > 0
+        )
+        .map((path) => {
+          const uri = toFileUri(path)
+          return {
+            uri,
+            name: fileNameFromPath(path),
+            mimeType: mimeTypeFromPath(path),
+            dedupeKey: uri,
+          }
         })
+      appendResourceLinks(normalized)
+    },
+    [appendResourceLinks]
+  )
+
+  const appendEmbeddedResources = useCallback(
+    (
+      resources: Array<{
+        uri: string
+        name: string
+        mimeType: string | null
+        text?: string | null
+        blob?: string | null
+      }>
+    ) => {
+      if (resources.length === 0) return
+      setAttachments((prev) => [
+        ...prev,
+        ...resources.map((resource) => ({
+          id: `resource-embedded:${crypto.randomUUID()}`,
+          type: "resource" as const,
+          kind: "embedded" as const,
+          uri: resource.uri,
+          name: resource.name,
+          mimeType: resource.mimeType,
+          text: resource.text ?? null,
+          blob: resource.blob ?? null,
+        })),
+      ])
+    },
+    []
+  )
+
+  const appendFilesAsResources = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return
+      const pathLinks: Array<{
+        uri: string
+        name: string
+        mimeType: string | null
+        dedupeKey: string
+      }> = []
+      const fallbackDataLinks: Array<{
+        uri: string
+        name: string
+        mimeType: string | null
+        dedupeKey: string
+      }> = []
+      const embeddedResources: Array<{
+        uri: string
+        name: string
+        mimeType: string | null
+        text?: string | null
+        blob?: string | null
+      }> = []
+
+      for (const file of files) {
+        const path = getFilePath(file)
+        const name = file.name || `resource-${crypto.randomUUID()}`
+        const mimeType = file.type || mimeTypeFromPath(name)
+        if (path) {
+          const uri = toFileUri(path)
+          pathLinks.push({
+            uri,
+            name: fileNameFromPath(path),
+            mimeType: mimeTypeFromPath(path) ?? mimeType ?? null,
+            dedupeKey: uri,
+          })
+          continue
+        }
+
+        if (!promptCapabilities.embedded_context) {
+          const base64 = await blobToBase64(file)
+          const dataUri = buildDataUri(base64, mimeType ?? null)
+          fallbackDataLinks.push({
+            uri: dataUri,
+            name,
+            mimeType: mimeType ?? null,
+            dedupeKey: `${name}:${file.size}:${file.lastModified}`,
+          })
+          continue
+        }
+
+        const uri = buildClipboardResourceUri(name)
+        if (isTextLikeFile(file)) {
+          const textContent = await file.text()
+          embeddedResources.push({
+            uri,
+            name,
+            mimeType: mimeType ?? null,
+            text: textContent,
+          })
+        } else {
+          const blobContent = await blobToBase64(file)
+          embeddedResources.push({
+            uri,
+            name,
+            mimeType: mimeType ?? null,
+            blob: blobContent,
+          })
+        }
       }
-      return next
-    })
+
+      appendResourceLinks(pathLinks)
+      appendResourceLinks(fallbackDataLinks)
+      appendEmbeddedResources(embeddedResources)
+    },
+    [
+      appendEmbeddedResources,
+      appendResourceLinks,
+      promptCapabilities.embedded_context,
+    ]
+  )
+
+  const appendImageAttachments = useCallback(async (files: File[]) => {
+    if (files.length === 0) return
+    const parsed = await Promise.all(
+      files.map(async (file, index) => {
+        const mimeType =
+          file.type && file.type.startsWith("image/")
+            ? file.type
+            : (mimeTypeFromPath(file.name) ?? "image/png")
+        const base64Data = await blobToBase64(file)
+        return {
+          id: `image:${Date.now()}:${index}:${crypto.randomUUID()}`,
+          type: "image" as const,
+          data: base64Data,
+          uri: null,
+          name: file.name || `image-${Date.now()}-${index + 1}`,
+          mimeType,
+        }
+      })
+    )
+    setAttachments((prev) => [...prev, ...parsed])
   }, [])
+
+  const appendImagePathAttachments = useCallback(
+    async (paths: string[]) => {
+      if (paths.length === 0 || !canAttachImages) return
+      const settled = await Promise.allSettled(
+        paths.map(async (path, index) => {
+          const data = await readFileBase64(path, DRAG_DROP_IMAGE_MAX_BYTES)
+          return {
+            id: `image:${Date.now()}:${index}:${crypto.randomUUID()}`,
+            type: "image" as const,
+            data,
+            uri: toFileUri(path),
+            name: fileNameFromPath(path),
+            mimeType: mimeTypeFromPath(path) ?? "image/png",
+          }
+        })
+      )
+
+      const parsed: ImageInputAttachment[] = []
+      settled.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          parsed.push(result.value)
+          return
+        }
+        console.error(
+          `[MessageInput] drop image path failed (${paths[index]}):`,
+          result.reason
+        )
+      })
+      if (parsed.length === 0) return
+      setAttachments((prev) => [...prev, ...parsed])
+    },
+    [canAttachImages]
+  )
+
+  const appendPathsFromDrop = useCallback(
+    async (paths: string[]) => {
+      if (paths.length === 0) return
+      const normalized = paths.filter(
+        (path): path is string => typeof path === "string" && path.length > 0
+      )
+      if (normalized.length === 0) return
+
+      const imagePaths: string[] = []
+      const resourcePaths: string[] = []
+      for (const path of normalized) {
+        const mimeType = mimeTypeFromPath(path) ?? ""
+        if (canAttachImages && mimeType.startsWith("image/")) {
+          imagePaths.push(path)
+        } else {
+          resourcePaths.push(path)
+        }
+      }
+
+      if (imagePaths.length > 0) {
+        await appendImagePathAttachments(imagePaths)
+      }
+      if (resourcePaths.length > 0) {
+        appendResourceAttachments(resourcePaths)
+      }
+    },
+    [appendImagePathAttachments, appendResourceAttachments, canAttachImages]
+  )
+
+  const appendFilesFromInput = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return
+      const imageFiles: File[] = []
+      const resourceFiles: File[] = []
+      for (const file of files) {
+        const mimeType = file.type || mimeTypeFromPath(file.name) || ""
+        if (canAttachImages && mimeType.startsWith("image/")) {
+          imageFiles.push(file)
+        } else {
+          resourceFiles.push(file)
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        await appendImageAttachments(imageFiles)
+      }
+      if (resourceFiles.length > 0) {
+        await appendFilesAsResources(resourceFiles)
+      }
+    },
+    [appendFilesAsResources, appendImageAttachments, canAttachImages]
+  )
+
+  const handlePaste = useCallback(
+    (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      if (disabled || isPrompting) return
+      const files = Array.from(event.clipboardData?.files ?? [])
+      if (files.length === 0) return
+      event.preventDefault()
+      void appendFilesFromInput(files).catch((error) => {
+        console.error("[MessageInput] paste files failed:", error)
+      })
+    },
+    [appendFilesFromInput, disabled, isPrompting]
+  )
 
   useEffect(() => {
     if (!showModeSelector) return
@@ -258,11 +663,11 @@ export function MessageInput({
       })
       if (!selected) return
       const picked = Array.isArray(selected) ? selected : [selected]
-      appendAttachments(picked.filter((item): item is string => !!item))
+      appendResourceAttachments(picked.filter((item): item is string => !!item))
     } catch (error) {
       console.error("[MessageInput] pick files failed:", error)
     }
-  }, [appendAttachments, defaultPath, disabled])
+  }, [appendResourceAttachments, defaultPath, disabled])
 
   useEffect(() => {
     if (!attachmentTabId) return
@@ -271,17 +676,61 @@ export function MessageInput({
       const customEvent = event as CustomEvent<AttachFileToSessionDetail>
       if (!customEvent.detail) return
       if (customEvent.detail.tabId !== attachmentTabId) return
-      appendAttachments([customEvent.detail.path])
+      appendResourceAttachments([customEvent.detail.path])
     }
 
     window.addEventListener(ATTACH_FILE_TO_SESSION_EVENT, handleAttachFile)
     return () => {
       window.removeEventListener(ATTACH_FILE_TO_SESSION_EVENT, handleAttachFile)
     }
-  }, [appendAttachments, attachmentTabId])
+  }, [appendResourceAttachments, attachmentTabId])
 
-  const removeAttachment = useCallback((path: string) => {
-    setAttachments((prev) => prev.filter((item) => item.path !== path))
+  useEffect(() => {
+    let unlisten: (() => void) | null = null
+    let cancelled = false
+
+    getCurrentWebview()
+      .onDragDropEvent((event) => {
+        const host = containerRef.current
+        if (!host) return
+        const payload = event.payload
+        if (payload.type === "leave") {
+          setIsDragActive(false)
+          return
+        }
+        const inside = pointWithinElement(payload.position, host)
+        if (payload.type === "drop") {
+          setIsDragActive(false)
+          if (Date.now() - lastDomDropAtRef.current < 250) return
+          if (!inside || disabled || isPrompting) return
+          void appendPathsFromDrop(payload.paths).catch((error) => {
+            console.error("[MessageInput] drag drop paths failed:", error)
+          })
+          return
+        }
+        setIsDragActive(inside && !disabled && !isPrompting)
+      })
+      .then((fn) => {
+        if (cancelled) {
+          fn()
+        } else {
+          unlisten = fn
+        }
+      })
+      .catch(() => {
+        // Ignore non-Tauri environments.
+      })
+
+    return () => {
+      cancelled = true
+      if (unlisten) {
+        unlisten()
+      }
+    }
+  }, [appendPathsFromDrop, disabled, isPrompting])
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => prev.filter((item) => item.id !== id))
   }, [])
 
   const handleSend = useCallback(() => {
@@ -293,18 +742,37 @@ export function MessageInput({
       blocks.push({ type: "text", text: trimmed })
     }
     for (const attachment of attachments) {
-      blocks.push({
-        type: "resource_link",
-        uri: attachment.uri,
-        name: attachment.name,
-        mime_type: attachment.mimeType,
-        description: null,
-      })
+      if (attachment.type === "resource") {
+        if (attachment.kind === "link") {
+          blocks.push({
+            type: "resource_link",
+            uri: attachment.uri,
+            name: attachment.name,
+            mime_type: attachment.mimeType,
+            description: null,
+          })
+        } else {
+          blocks.push({
+            type: "resource",
+            uri: attachment.uri,
+            mime_type: attachment.mimeType,
+            text: attachment.text ?? null,
+            blob: attachment.blob ?? null,
+          })
+        }
+      } else {
+        blocks.push({
+          type: "image",
+          data: attachment.data,
+          mime_type: attachment.mimeType,
+          uri: attachment.uri,
+        })
+      }
     }
 
     const displayText =
       trimmed ||
-      `Attached ${attachments.length} resource${attachments.length > 1 ? "s" : ""}`
+      `Attached ${attachments.length} attachment${attachments.length > 1 ? "s" : ""}`
     onSend({ blocks, displayText }, showModeSelector ? effectiveModeId : null)
     if (effectiveDraftStorageKey) {
       clearMessageInputDraft(effectiveDraftStorageKey)
@@ -372,11 +840,70 @@ export function MessageInput({
     ]
   )
 
+  const handleContainerDragOver = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (!hasDragFiles(event.dataTransfer)) return
+      event.preventDefault()
+      if (!disabled && !isPrompting) {
+        setIsDragActive(true)
+      }
+    },
+    [disabled, isPrompting]
+  )
+
+  const handleContainerDragLeave = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      const related = event.relatedTarget
+      if (
+        related &&
+        related instanceof Node &&
+        event.currentTarget.contains(related)
+      ) {
+        return
+      }
+      setIsDragActive(false)
+    },
+    []
+  )
+
+  const handleContainerDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (!hasDragFiles(event.dataTransfer)) return
+      event.preventDefault()
+      lastDomDropAtRef.current = Date.now()
+      setIsDragActive(false)
+      if (disabled || isPrompting) return
+      const files = Array.from(event.dataTransfer.files ?? [])
+      if (files.length > 0) {
+        void appendFilesFromInput(files).catch((error) => {
+          console.error("[MessageInput] drop files failed:", error)
+        })
+      }
+    },
+    [appendFilesFromInput, disabled, isPrompting]
+  )
+
+  const hasImageAttachments = imageAttachments.length > 0
+  const hasResourceAttachments = resourceAttachments.length > 0
+  const topPaddingClass =
+    hasImageAttachments && hasResourceAttachments
+      ? "pt-24"
+      : hasImageAttachments
+        ? "pt-16"
+        : hasResourceAttachments
+          ? "pt-10"
+          : "pt-3"
   const bottomPaddingClass = "pb-10"
-  const topPaddingClass = hasAttachments ? "pt-10" : ""
+  const showDragActive = isDragActive && !disabled && !isPrompting
 
   return (
-    <div className="relative">
+    <div
+      ref={containerRef}
+      className="relative"
+      onDragOver={handleContainerDragOver}
+      onDragLeave={handleContainerDragLeave}
+      onDrop={handleContainerDrop}
+    >
       {slashMenuOpen && filteredSlashCommands.length > 0 && (
         <SlashCommandMenu
           commands={filteredSlashCommands}
@@ -390,39 +917,77 @@ export function MessageInput({
         onKeyDown={handleKeyDown}
         onCompositionStart={() => (composingRef.current = true)}
         onCompositionEnd={() => (composingRef.current = false)}
+        onPaste={handlePaste}
         onFocus={onFocus}
         placeholder={resolvedPlaceholder}
         className={cn(
           "text-sm pr-12 resize-none bg-transparent",
+          showDragActive && "ring-1 ring-primary/40",
           topPaddingClass,
           bottomPaddingClass,
           className
         )}
         autoFocus={autoFocus}
       />
-      {hasAttachments && (
-        <div className="absolute left-2 right-2 top-2">
-          <div className="flex items-center gap-1 overflow-x-auto">
-            {attachments.map((attachment) => (
-              <div
-                key={attachment.path}
-                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] text-muted-foreground"
-              >
-                <FileSearch className="h-3 w-3" />
-                <span className="max-w-40 truncate">{attachment.name}</span>
-                <button
-                  type="button"
-                  onClick={() => removeAttachment(attachment.path)}
-                  className="rounded-sm p-0.5 hover:bg-muted-foreground/15"
-                  aria-label={t("removeAttachmentAria", {
-                    name: attachment.name,
-                  })}
+      {(hasImageAttachments || hasResourceAttachments) && (
+        <div className="absolute left-2 right-12 top-2 z-10 flex flex-col gap-1">
+          {hasImageAttachments && (
+            <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+              {imageAttachments.map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className="relative shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/30"
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </div>
+                  <Image
+                    src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                    alt={attachment.name}
+                    width={56}
+                    height={56}
+                    unoptimized
+                    className="h-14 w-14 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(attachment.id)}
+                    className="absolute right-1 top-1 rounded-sm bg-background/70 p-0.5 hover:bg-background"
+                    aria-label={t("removeAttachmentAria", {
+                      name: attachment.name,
+                    })}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {hasResourceAttachments && (
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {resourceAttachments.map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] text-muted-foreground"
+                >
+                  <FileSearch className="h-3 w-3" />
+                  <span className="max-w-40 truncate">{attachment.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(attachment.id)}
+                    className="rounded-sm p-0.5 hover:bg-muted-foreground/15"
+                    aria-label={t("removeAttachmentAria", {
+                      name: attachment.name,
+                    })}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {showDragActive && (
+        <div className="pointer-events-none absolute inset-1 z-20 flex items-center justify-center rounded-md border border-dashed border-primary/50 bg-background/80 text-xs text-muted-foreground">
+          {t("dropFilesToAttach")}
         </div>
       )}
       <div className="absolute left-2 right-24 bottom-2 flex flex-col gap-1">

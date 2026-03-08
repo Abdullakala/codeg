@@ -16,6 +16,7 @@ import type { AgentType, PromptDraft } from "@/lib/types"
 import type { AdaptedMessage } from "@/lib/adapters/ai-elements-adapter"
 import {
   buildUserMessageTextPartsFromDraft,
+  extractUserImagesFromDraft,
   extractUserResourcesFromDraft,
 } from "@/lib/prompt-draft"
 import { buildConversationDraftStorageKey } from "@/lib/message-input-draft"
@@ -119,6 +120,7 @@ const ExistingConversationView = memo(function ExistingConversationView({
             draft,
             sharedT("attachedResources")
           ),
+          userImages: extractUserImagesFromDraft(draft),
           userResources: extractUserResourcesFromDraft(draft),
           timestamp: new Date().toISOString(),
         },
@@ -209,6 +211,7 @@ const ExistingConversationView = memo(function ExistingConversationView({
   return (
     <ConversationShell
       status={conn.status}
+      promptCapabilities={conn.promptCapabilities}
       defaultPath={folder?.path}
       error={conn.error}
       pendingPermission={conn.pendingPermission}

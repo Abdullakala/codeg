@@ -7,6 +7,7 @@ use std::process::{Command, Stdio};
 use std::sync::{mpsc, LazyLock, Mutex};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
+use base64::Engine as _;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use tauri::Emitter;
@@ -1161,6 +1162,8 @@ const FILE_PREVIEW_MIN_BYTES: usize = 4_096;
 const FILE_PREVIEW_MAX_BYTES: usize = 2_000_000;
 const FILE_EDIT_DEFAULT_MAX_BYTES: usize = 400_000;
 const FILE_EDIT_MAX_BYTES: usize = 2_000_000;
+const FILE_BASE64_DEFAULT_MAX_BYTES: usize = 20_000_000;
+const FILE_BASE64_MAX_BYTES: usize = 100_000_000;
 const FILE_IO_MAX_CONCURRENT_OPS: usize = 8;
 
 static FILE_IO_SEMAPHORE: LazyLock<Semaphore> =
@@ -2026,6 +2029,47 @@ pub async fn get_file_tree(
     }
 
     Ok(dir_children.remove(&root).unwrap_or_default())
+}
+
+#[tauri::command]
+pub async fn read_file_base64(
+    path: String,
+    max_bytes: Option<usize>,
+) -> Result<String, AppCommandError> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err(AppCommandError::invalid_input("Path cannot be empty"));
+    }
+    let target = PathBuf::from(trimmed);
+    if !target.exists() {
+        return Err(AppCommandError::not_found("File does not exist"));
+    }
+    if !target.is_file() {
+        return Err(AppCommandError::invalid_input("Path is not a file"));
+    }
+
+    let limit = max_bytes
+        .unwrap_or(FILE_BASE64_DEFAULT_MAX_BYTES)
+        .clamp(FILE_PREVIEW_MIN_BYTES, FILE_BASE64_MAX_BYTES);
+
+    run_file_io(move || {
+        let metadata = std::fs::metadata(&target).map_err(AppCommandError::io)?;
+        if metadata.len() > limit as u64 {
+            return Err(
+                AppCommandError::invalid_input("File is too large to attach")
+                    .with_detail(format!("max_bytes={limit}")),
+            );
+        }
+        let bytes = std::fs::read(&target).map_err(AppCommandError::io)?;
+        if bytes.len() > limit {
+            return Err(
+                AppCommandError::invalid_input("File is too large to attach")
+                    .with_detail(format!("max_bytes={limit}")),
+            );
+        }
+        Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+    })
+    .await
 }
 
 #[tauri::command]

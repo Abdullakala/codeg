@@ -16,6 +16,12 @@ pub enum ContentBlock {
     Text {
         text: String,
     },
+    Image {
+        data: String,
+        mime_type: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        uri: Option<String>,
+    },
     ToolUse {
         tool_use_id: Option<String>,
         tool_name: String,

@@ -61,6 +61,12 @@ export type MessageRole = "user" | "assistant" | "system" | "tool"
 export type ContentBlock =
   | { type: "text"; text: string }
   | {
+      type: "image"
+      data: string
+      mime_type: string
+      uri?: string | null
+    }
+  | {
       type: "tool_use"
       tool_use_id: string | null
       tool_name: string
@@ -304,8 +310,27 @@ export type ConnectionStatus =
   | "disconnected"
   | "error"
 
+export interface PromptCapabilitiesInfo {
+  image: boolean
+  audio: boolean
+  embedded_context: boolean
+}
+
 export type PromptInputBlock =
   | { type: "text"; text: string }
+  | {
+      type: "image"
+      data: string
+      mime_type: string
+      uri?: string | null
+    }
+  | {
+      type: "resource"
+      uri: string
+      mime_type?: string | null
+      text?: string | null
+      blob?: string | null
+    }
   | {
       type: "resource_link"
       uri: string
@@ -429,6 +454,11 @@ export type AcpEvent =
   | {
       type: "selectors_ready"
       connection_id: string
+    }
+  | {
+      type: "prompt_capabilities"
+      connection_id: string
+      prompt_capabilities: PromptCapabilitiesInfo
     }
   | {
       type: "mode_changed"

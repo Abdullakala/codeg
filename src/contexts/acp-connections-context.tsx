@@ -33,6 +33,7 @@ import type {
   SessionConfigOptionInfo,
   SessionModeStateInfo,
   FixAction,
+  PromptCapabilitiesInfo,
   PromptInputBlock,
 } from "@/lib/types"
 import { AGENT_LABELS } from "@/lib/types"
@@ -80,6 +81,7 @@ export interface ConnectionState {
   contextKey: string
   agentType: AgentType
   status: ConnectionStatus
+  promptCapabilities: PromptCapabilitiesInfo
   selectorsReady: boolean
   sessionId: string | null
   modes: SessionModeStateInfo | null
@@ -156,6 +158,11 @@ type Action =
   | {
       type: "SELECTORS_READY"
       contextKey: string
+    }
+  | {
+      type: "PROMPT_CAPABILITIES"
+      contextKey: string
+      promptCapabilities: PromptCapabilitiesInfo
     }
   | { type: "MODE_CHANGED"; contextKey: string; modeId: string }
   | {
@@ -264,6 +271,17 @@ function sameModes(
     }
   }
   return true
+}
+
+function samePromptCapabilities(
+  a: PromptCapabilitiesInfo,
+  b: PromptCapabilitiesInfo
+): boolean {
+  return (
+    a.image === b.image &&
+    a.audio === b.audio &&
+    a.embedded_context === b.embedded_context
+  )
 }
 
 function samePlanEntries(a: PlanEntryInfo[], b: PlanEntryInfo[]): boolean {
@@ -412,6 +430,11 @@ function connectionsReducer(
         contextKey: action.contextKey,
         agentType: action.agentType,
         status: "connecting",
+        promptCapabilities: {
+          image: false,
+          audio: false,
+          embedded_context: false,
+        },
         selectorsReady: false,
         sessionId: null,
         modes: null,
@@ -753,6 +776,25 @@ function connectionsReducer(
       next.set(action.contextKey, {
         ...conn,
         selectorsReady: true,
+      })
+      return next
+    }
+
+    case "PROMPT_CAPABILITIES": {
+      const conn = state.get(action.contextKey)
+      if (!conn) return state
+      if (
+        samePromptCapabilities(
+          conn.promptCapabilities,
+          action.promptCapabilities
+        )
+      ) {
+        return state
+      }
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...conn,
+        promptCapabilities: action.promptCapabilities,
       })
       return next
     }
@@ -1305,6 +1347,14 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           dispatch({
             type: "SELECTORS_READY",
             contextKey,
+          })
+          break
+        case "prompt_capabilities":
+          flushStreamingQueue()
+          dispatch({
+            type: "PROMPT_CAPABILITIES",
+            contextKey,
+            promptCapabilities: e.prompt_capabilities,
           })
           break
         case "mode_changed":

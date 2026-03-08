@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl"
 import type {
   ConnectionStatus,
+  PromptCapabilitiesInfo,
   PromptDraft,
   SessionConfigOptionInfo,
   SessionModeInfo,
@@ -12,6 +13,7 @@ import { MessageInput } from "@/components/chat/message-input"
 
 interface ChatInputProps {
   status: ConnectionStatus | null
+  promptCapabilities: PromptCapabilitiesInfo
   defaultPath?: string
   onFocus?: () => void
   onSend: (draft: PromptDraft, modeId?: string | null) => void
@@ -30,6 +32,7 @@ interface ChatInputProps {
 
 export function ChatInput({
   status,
+  promptCapabilities,
   defaultPath,
   onFocus,
   onSend,
@@ -54,6 +57,7 @@ export function ChatInput({
     <div className="p-4 pt-0">
       <MessageInput
         onSend={onSend}
+        promptCapabilities={promptCapabilities}
         onFocus={onFocus}
         defaultPath={defaultPath}
         disabled={!isConnected}

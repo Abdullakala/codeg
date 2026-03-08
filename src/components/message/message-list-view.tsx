@@ -8,6 +8,7 @@ import {
   type AdaptedMessage,
   type AdaptedContentPart,
   type MessageGroup,
+  type UserImageDisplay,
   type UserResourceDisplay,
   groupAdaptedMessages,
   extractUserResourcesFromText,
@@ -15,6 +16,7 @@ import {
 import { TurnStats } from "./turn-stats"
 import { LiveTurnStats } from "./live-turn-stats"
 import { UserResourceLinks } from "./user-resource-links"
+import { UserImageAttachments } from "./user-image-attachments"
 import { useSessionStats } from "@/contexts/session-stats-context"
 import { LiveMessageBlock } from "@/components/chat/live-message-block"
 import { AgentPlanOverlay } from "@/components/chat/agent-plan-overlay"
@@ -45,6 +47,7 @@ interface MessageListViewProps {
 interface ResolvedMessageGroup extends MessageGroup {
   parts: AdaptedContentPart[]
   resources: UserResourceDisplay[]
+  images: UserImageDisplay[]
 }
 
 function fallbackExtractUserResources(
@@ -53,11 +56,13 @@ function fallbackExtractUserResources(
 ): {
   parts: AdaptedContentPart[]
   resources: UserResourceDisplay[]
+  images: UserImageDisplay[]
 } {
   if (group.role !== "user") {
     return {
       parts: group.parts,
       resources: group.userResources ?? [],
+      images: group.userImages ?? [],
     }
   }
 
@@ -94,7 +99,11 @@ function fallbackExtractUserResources(
     parsedParts.push({ type: "text", text: attachedResourcesText })
   }
 
-  return { parts: parsedParts, resources: dedupedResources }
+  return {
+    parts: parsedParts,
+    resources: dedupedResources,
+    images: group.userImages ?? [],
+  }
 }
 
 function resolveMessageGroup(
@@ -106,6 +115,7 @@ function resolveMessageGroup(
     ...group,
     parts: resolved.parts,
     resources: resolved.resources,
+    images: resolved.images,
   }
 }
 
@@ -125,6 +135,9 @@ const HistoricalMessageGroup = memo(function HistoricalMessageGroup({
         <MessageContent>
           <ContentPartsRenderer parts={group.parts} role={group.role} />
         </MessageContent>
+        {group.role === "user" && group.images.length > 0 ? (
+          <UserImageAttachments images={group.images} className="self-end" />
+        ) : null}
         {group.role === "user" && group.resources.length > 0 ? (
           <UserResourceLinks resources={group.resources} className="self-end" />
         ) : null}
@@ -152,6 +165,9 @@ const PendingMessageGroup = memo(function PendingMessageGroup({
         <MessageContent>
           <ContentPartsRenderer parts={group.parts} role={group.role} />
         </MessageContent>
+        {group.role === "user" && group.images.length > 0 ? (
+          <UserImageAttachments images={group.images} className="self-end" />
+        ) : null}
         {group.role === "user" && group.resources.length > 0 ? (
           <UserResourceLinks resources={group.resources} className="self-end" />
         ) : null}

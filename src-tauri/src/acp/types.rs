@@ -7,6 +7,21 @@ pub enum PromptInputBlock {
     Text {
         text: String,
     },
+    Image {
+        data: String,
+        mime_type: String,
+        #[serde(default)]
+        uri: Option<String>,
+    },
+    Resource {
+        uri: String,
+        #[serde(default)]
+        mime_type: Option<String>,
+        #[serde(default)]
+        text: Option<String>,
+        #[serde(default)]
+        blob: Option<String>,
+    },
     ResourceLink {
         uri: String,
         name: String,
@@ -15,6 +30,13 @@ pub enum PromptInputBlock {
         #[serde(default)]
         description: Option<String>,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PromptCapabilitiesInfo {
+    pub image: bool,
+    pub audio: bool,
+    pub embedded_context: bool,
 }
 
 /// Events pushed from Rust backend to frontend via Tauri event system.
@@ -77,6 +99,11 @@ pub enum AcpEvent {
     },
     /// Initial selector payloads (modes/config options) have been emitted
     SelectorsReady { connection_id: String },
+    /// Prompt capabilities for this connection
+    PromptCapabilities {
+        connection_id: String,
+        prompt_capabilities: PromptCapabilitiesInfo,
+    },
     /// Current session mode changed
     ModeChanged {
         connection_id: String,

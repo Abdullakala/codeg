@@ -206,6 +206,7 @@ pub fn run() {
             folders::start_file_tree_watch,
             folders::stop_file_tree_watch,
             folders::get_file_tree,
+            folders::read_file_base64,
             folders::read_file_preview,
             folders::read_file_for_edit,
             folders::save_file_content,

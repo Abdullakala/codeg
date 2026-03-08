@@ -743,6 +743,13 @@ export async function stopFileTreeWatch(rootPath: string): Promise<void> {
   return invoke("stop_file_tree_watch", { rootPath })
 }
 
+export async function readFileBase64(
+  path: string,
+  maxBytes?: number
+): Promise<string> {
+  return invoke("read_file_base64", { path, maxBytes: maxBytes ?? null })
+}
+
 export async function readFilePreview(
   rootPath: string,
   path: string,

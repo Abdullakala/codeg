@@ -16,6 +16,7 @@ import {
 } from "@/lib/adapters/ai-elements-adapter"
 import {
   buildUserMessageTextPartsFromDraft,
+  extractUserImagesFromDraft,
   extractUserResourcesFromDraft,
   getPromptDraftDisplayText,
 } from "@/lib/prompt-draft"
@@ -41,6 +42,7 @@ import { AgentPlanOverlay } from "@/components/chat/agent-plan-overlay"
 import { LiveTurnStats } from "@/components/message/live-turn-stats"
 import { TurnStats } from "@/components/message/turn-stats"
 import { UserResourceLinks } from "@/components/message/user-resource-links"
+import { UserImageAttachments } from "@/components/message/user-image-attachments"
 import { ConversationShell } from "@/components/chat/conversation-shell"
 import {
   MessageThread,
@@ -604,6 +606,7 @@ export function WelcomeInputPanel({
           draft,
           sharedT("attachedResources")
         ),
+        userImages: extractUserImagesFromDraft(draft),
         userResources: extractUserResourcesFromDraft(draft),
         timestamp: new Date().toISOString(),
       }
@@ -683,6 +686,7 @@ export function WelcomeInputPanel({
           draft,
           sharedT("attachedResources")
         ),
+        userImages: extractUserImagesFromDraft(draft),
         userResources: extractUserResourcesFromDraft(draft),
         timestamp: new Date().toISOString(),
       }
@@ -791,6 +795,7 @@ export function WelcomeInputPanel({
           <MessageInput
             key={newConversationDraftStorageKey}
             onSend={handleWelcomeSend}
+            promptCapabilities={conn.promptCapabilities}
             defaultPath={workingDir}
             placeholder={
               agentsLoaded && usableAgentCount === 0
@@ -827,6 +832,7 @@ export function WelcomeInputPanel({
   return (
     <ConversationShell
       status={connStatus}
+      promptCapabilities={conn.promptCapabilities}
       defaultPath={workingDir}
       error={conn.error}
       pendingPermission={conn.pendingPermission}
@@ -854,6 +860,12 @@ export function WelcomeInputPanel({
                   <MessageContent>
                     <ContentPartsRenderer parts={msg.content} role={msg.role} />
                   </MessageContent>
+                  {msg.role === "user" && msg.userImages?.length ? (
+                    <UserImageAttachments
+                      images={msg.userImages}
+                      className="self-end"
+                    />
+                  ) : null}
                   {msg.role === "user" && msg.userResources?.length ? (
                     <UserResourceLinks
                       resources={msg.userResources}

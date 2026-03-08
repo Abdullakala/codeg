@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import type {
   ConnectionStatus,
+  PromptCapabilitiesInfo,
   PromptDraft,
   SessionConfigOptionInfo,
   SessionModeInfo,
@@ -12,6 +13,7 @@ import { PermissionDialog } from "@/components/chat/permission-dialog"
 
 interface ConversationShellProps {
   status: ConnectionStatus | null
+  promptCapabilities: PromptCapabilitiesInfo
   defaultPath?: string
   error: string | null
   pendingPermission: PendingPermission | null
@@ -34,6 +36,7 @@ interface ConversationShellProps {
 
 export function ConversationShell({
   status,
+  promptCapabilities,
   defaultPath,
   error,
   pendingPermission,
@@ -64,6 +67,7 @@ export function ConversationShell({
 
       <ChatInput
         status={status}
+        promptCapabilities={promptCapabilities}
         defaultPath={defaultPath}
         onFocus={onFocus}
         onSend={onSend}

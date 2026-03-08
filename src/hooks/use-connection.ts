@@ -13,14 +13,22 @@ import type {
   AgentType,
   AvailableCommandInfo,
   ConnectionStatus,
+  PromptCapabilitiesInfo,
   SessionConfigOptionInfo,
   SessionModeStateInfo,
   PromptInputBlock,
 } from "@/lib/types"
 
+const DEFAULT_PROMPT_CAPABILITIES: PromptCapabilitiesInfo = {
+  image: false,
+  audio: false,
+  embedded_context: false,
+}
+
 export interface UseConnectionReturn {
   connectionId: string | null
   status: ConnectionStatus | null
+  promptCapabilities: PromptCapabilitiesInfo
   selectorsReady: boolean
   sessionId: string | null
   modes: SessionModeStateInfo | null
@@ -64,6 +72,8 @@ export function useConnection(contextKey: string): UseConnectionReturn {
 
   const connectionId = connection?.connectionId ?? null
   const status = connection?.status ?? null
+  const promptCapabilities =
+    connection?.promptCapabilities ?? DEFAULT_PROMPT_CAPABILITIES
   const selectorsReady = connection?.selectorsReady ?? false
   const sessionId = connection?.sessionId ?? null
   const modes = connection?.modes ?? null
@@ -119,6 +129,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
     () => ({
       connectionId,
       status,
+      promptCapabilities,
       selectorsReady,
       sessionId,
       modes,
@@ -138,6 +149,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
     [
       connectionId,
       status,
+      promptCapabilities,
       selectorsReady,
       sessionId,
       modes,

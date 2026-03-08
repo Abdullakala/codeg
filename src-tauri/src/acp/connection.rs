@@ -4,19 +4,21 @@ use std::sync::Arc;
 
 use sacp::schema::McpServerStdio;
 use sacp::schema::{
-    CancelNotification, ClientCapabilities, ContentBlock, ContentChunk, CreateTerminalRequest,
-    CreateTerminalResponse, FileSystemCapability, InitializeRequest, KillTerminalCommandRequest,
+    BlobResourceContents, CancelNotification, ClientCapabilities, ContentBlock, ContentChunk,
+    CreateTerminalRequest, CreateTerminalResponse, EmbeddedResource, EmbeddedResourceResource,
+    FileSystemCapability, ImageContent, InitializeRequest, KillTerminalCommandRequest,
     KillTerminalCommandResponse, LoadSessionRequest, NewSessionRequest, NewSessionResponse,
-    PermissionOptionKind, Plan, PlanEntryPriority, PlanEntryStatus, PromptRequest, ProtocolVersion,
-    ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, ResourceLink,
-    SelectedPermissionOutcome, SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
-    SessionConfigSelectGroup, SessionConfigSelectOption, SessionConfigSelectOptions, SessionId,
-    SessionModeState, SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
+    PermissionOptionKind, Plan, PlanEntryPriority, PlanEntryStatus, PromptRequest,
+    ProtocolVersion, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
+    ReleaseTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    RequestPermissionResponse, ResourceLink, SelectedPermissionOutcome, SessionConfigKind,
+    SessionConfigOption, SessionConfigOptionCategory, SessionConfigSelectGroup,
+    SessionConfigSelectOption, SessionConfigSelectOptions, SessionId, SessionModeState,
+    SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
     SetSessionConfigOptionResponse, SetSessionModeRequest, StopReason, TerminalExitStatus,
-    TerminalOutputRequest, TerminalOutputResponse, TextContent, ToolCallContent,
-    WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
-    WriteTextFileResponse,
+    TerminalOutputRequest, TerminalOutputResponse, TextContent, TextResourceContents,
+    ToolCallContent, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
+    WriteTextFileRequest, WriteTextFileResponse,
 };
 use sacp::util::MatchDispatch;
 use sacp::{
@@ -32,9 +34,9 @@ use crate::acp::registry::{self, AgentDistribution};
 use crate::acp::terminal_runtime::{TerminalRuntime, TerminalRuntimeError};
 use crate::acp::types::{
     AcpEvent, AvailableCommandInfo, ConnectionInfo, ConnectionStatus, PermissionOptionInfo,
-    PlanEntryInfo, PromptInputBlock, SessionConfigKindInfo, SessionConfigOptionInfo,
-    SessionConfigSelectGroupInfo, SessionConfigSelectInfo, SessionConfigSelectOptionInfo,
-    SessionModeInfo, SessionModeStateInfo,
+    PlanEntryInfo, PromptCapabilitiesInfo, PromptInputBlock, SessionConfigKindInfo,
+    SessionConfigOptionInfo, SessionConfigSelectGroupInfo, SessionConfigSelectInfo,
+    SessionConfigSelectOptionInfo, SessionModeInfo, SessionModeStateInfo,
 };
 use crate::models::agent::AgentType;
 use crate::network::proxy;
@@ -448,6 +450,24 @@ fn emit_selectors_ready(connection_id: &str, app_handle: &tauri::AppHandle) {
     );
 }
 
+fn emit_prompt_capabilities(
+    connection_id: &str,
+    app_handle: &tauri::AppHandle,
+    capabilities: &sacp::schema::PromptCapabilities,
+) {
+    let _ = app_handle.emit(
+        "acp://event",
+        AcpEvent::PromptCapabilities {
+            connection_id: connection_id.into(),
+            prompt_capabilities: PromptCapabilitiesInfo {
+                image: capabilities.image,
+                audio: capabilities.audio,
+                embedded_context: capabilities.embedded_context,
+            },
+        },
+    );
+}
+
 fn resolve_working_dir(working_dir: Option<&str>) -> PathBuf {
     match working_dir {
         Some(dir) => {
@@ -591,7 +611,12 @@ async fn run_connection(
                         .read_text_file(true)
                         .write_text_file(true)),
             );
-            let _init_resp = cx.send_request_to(Agent, init_request).block_task().await?;
+            let init_resp = cx.send_request_to(Agent, init_request).block_task().await?;
+            emit_prompt_capabilities(
+                &conn_id,
+                &handle,
+                &init_resp.agent_capabilities.prompt_capabilities,
+            );
 
             // Emit connected status
             let _ = handle.emit(
@@ -1128,6 +1153,35 @@ fn map_prompt_blocks(blocks: Vec<PromptInputBlock>) -> Vec<ContentBlock> {
         .into_iter()
         .map(|block| match block {
             PromptInputBlock::Text { text } => ContentBlock::Text(TextContent::new(text)),
+            PromptInputBlock::Image {
+                data,
+                mime_type,
+                uri,
+            } => ContentBlock::Image(ImageContent::new(data, mime_type).uri(uri)),
+            PromptInputBlock::Resource {
+                uri,
+                mime_type,
+                text,
+                blob,
+            } => {
+                let resource = match (text, blob) {
+                    (Some(text_value), _) => {
+                        let content =
+                            TextResourceContents::new(text_value, uri.clone()).mime_type(mime_type);
+                        EmbeddedResourceResource::TextResourceContents(content)
+                    }
+                    (None, Some(blob_value)) => {
+                        let content =
+                            BlobResourceContents::new(blob_value, uri.clone()).mime_type(mime_type);
+                        EmbeddedResourceResource::BlobResourceContents(content)
+                    }
+                    (None, None) => {
+                        let content = TextResourceContents::new("", uri.clone()).mime_type(mime_type);
+                        EmbeddedResourceResource::TextResourceContents(content)
+                    }
+                };
+                ContentBlock::Resource(EmbeddedResource::new(resource))
+            }
             PromptInputBlock::ResourceLink {
                 uri,
                 name,
