@@ -1,9 +1,16 @@
 {
   "Language": {
     "followSystem": "跟隨系統",
-    "english": "English",
-    "simplifiedChinese": "简体中文",
-    "traditionalChinese": "繁體中文"
+    "english": "英文",
+    "simplifiedChinese": "簡體中文",
+    "traditionalChinese": "繁體中文",
+    "japanese": "日語",
+    "korean": "韓語",
+    "spanish": "西班牙語",
+    "german": "德語",
+    "french": "法語",
+    "portuguese": "葡萄牙語",
+    "arabic": "阿拉伯語"
   },
   "WelcomePage": {
     "title": "歡迎使用Codeg",
@@ -74,7 +81,7 @@
     "resolvedTheme": {
       "light": "淺色",
       "dark": "深色",
-      "unknown": "--"
+      "unknown": "未知"
     }
   },
   "SystemSettings": {
@@ -193,7 +200,7 @@
     "emptySkills": "暫無 Skill，可點擊「新增 Skill」。",
     "newSkillTitle": "新增 Skill",
     "skillInfo": "Skill 資訊",
-    "skillIdPlaceholder": "skill-id (letters/numbers/-/_/.)",
+    "skillIdPlaceholder": "Skill ID（例如：my-skill）",
     "skillsDirectoryWithPath": "Skills目錄：{path}",
     "skillsDirectoryNeedId": "Skills目錄：請輸入 Skill ID 以產生完整路徑",
     "markdownContent": "Markdown 內容",
@@ -318,20 +325,20 @@
       "empty": "暫無 MCP 結果。",
       "loadingDetail": "載入市場詳情...",
       "detailLoadFailed": "載入詳情失敗：{message}",
-      "owner": "Owner: {owner}",
-      "namespace": "Namespace: {namespace}",
+      "owner": "擁有者：{owner}",
+      "namespace": "命名空間：{namespace}",
       "defaultInstallProtocol": "預設安裝協議",
       "currentOptionParameterCount": "目前選項參數數：{count}",
       "installConfigDescription": "安裝配置(JSON，可修改後安裝；修改後將覆蓋協議/參數表單)",
       "selectLeftToView": "請選擇左側市場 MCP 查看詳情。"
     },
     "badges": {
-      "verified": "Verified",
-      "remote": "Remote",
-      "hasHomepage": "Has Homepage",
-      "uses": "{count} uses",
-      "deployed": "Deployed",
-      "notDeployed": "Not Deployed"
+      "verified": "已驗證",
+      "remote": "遠端",
+      "hasHomepage": "有首頁",
+      "uses": "{count} 次使用",
+      "deployed": "已部署",
+      "notDeployed": "未部署"
     },
     "selectLeftMcp": "請選擇左側 MCP。"
   },
@@ -625,8 +632,8 @@
         "prompting": "回應中...",
         "error": "連線異常",
         "disconnected": "未連線",
-        "tooltip": "{agent} - {status}",
-        "tooltipError": "{agent} - {error}"
+        "tooltip": "{agent}：{status}",
+        "tooltipError": "{agent}：{error}"
       },
       "tasks": {
         "title": "任務"
@@ -653,10 +660,10 @@
     },
     "auxPanel": {
       "tabs": {
-        "diff": "Diff",
-        "files": "Files",
-        "changes": "Changes",
-        "commits": "Commits"
+        "diff": "差異",
+        "files": "檔案",
+        "changes": "變更",
+        "commits": "提交"
       }
     },
     "windowControls": {
@@ -712,7 +719,7 @@
       "fileCount": "{count} 個檔案",
       "openFileOrDiff": "從右側面板打開檔案或差異",
       "disk": "磁碟",
-      "head": "HEAD",
+      "head": "HEAD（目前提交）",
       "unsaved": "未儲存",
       "workingTree": "工作區",
       "loading": "載入中...",
@@ -817,7 +824,7 @@
         "addToVcs": "加入到 VCS"
       },
       "aria": {
-        "selectFile": "{action} {path}",
+        "selectFile": "{action}：{path}",
         "unselectAllFiles": "取消選擇全部檔案",
         "selectAllFiles": "選擇全部檔案",
         "unselectTracked": "取消選擇已追蹤變更",
@@ -833,13 +840,13 @@
       "commitMessage": "提交訊息",
       "commitMessagePlaceholder": "輸入提交訊息...",
       "commitButton": "提交 ({count})",
-      "head": "HEAD",
-      "workingTree": "Working Tree",
+      "head": "HEAD（目前提交）",
+      "workingTree": "工作目錄",
       "clickFileToDiff": "點擊檔案名稱查看差異",
       "loadingDiff": "載入差異中..."
     },
     "gitLogTab": {
-      "filesTitle": "Files",
+      "filesTitle": "檔案",
       "expandAllFiles": "展開全部檔案",
       "collapseAllFiles": "折疊全部檔案",
       "workspace": "工作區",
@@ -953,7 +960,7 @@
         "addToVcs": "加入到 VCS"
       },
       "aria": {
-        "selectPath": "{action} {path}"
+        "selectPath": "{action}：{path}"
       },
       "toasts": {
         "openDirectoryFailed": "開啟目錄失敗",
@@ -978,8 +985,8 @@
         "renameDirectory": "重新命名目錄",
         "renameFile": "重新命名檔案",
         "description": "輸入新的名稱（僅名稱，不含路徑）。",
-        "placeholderDirectory": "new-folder-name",
-        "placeholderFile": "new-file-name.ext"
+        "placeholderDirectory": "新資料夾名稱",
+        "placeholderFile": "新檔案名稱.ext"
       },
       "directoryDialog": {
         "descriptionAdd": "選擇目錄 {path} 下要加入到 VCS 的檔案。",
@@ -1059,13 +1066,13 @@
       "noDiffOutput": "無差異輸出。",
       "diffTitleWorkspace": "Diff · 工作區",
       "diffDescriptionWorkingTree": "工作區變更（HEAD）",
-      "diffTitleFile": "Diff · {name}",
+      "diffTitleFile": "差異 · {name}",
       "compareTitleFile": "比較 · {name}",
       "compareTitleBranch": "比較 · {branch}",
       "compareDescriptionPath": "{path} · 與 {branch} 比較",
       "compareDescriptionBranch": "與 {branch} 比較",
-      "diffTitleCommitFile": "Diff · {name} @ {hash}",
-      "diffTitleCommit": "Diff · {hash}",
+      "diffTitleCommitFile": "差異 · {name} @ {hash}",
+      "diffTitleCommit": "差異 · {hash}",
       "diffDescriptionCommitPath": "{path} · 提交 {commit}",
       "diffDescriptionCommit": "提交 {commit}",
       "diffTitleConflictFile": "衝突 · {name}",
@@ -1078,7 +1085,7 @@
           "retry": "重試"
         },
         "agentsSetupHint": "點擊前往設定 > Agents 管理安裝。",
-        "withSetupHint": "{message}\n{hint}",
+        "withSetupHint": "{message}\n提示：{hint}",
         "blocked": {
           "missingConfig": "無法讀取目前 Agent 設定。",
           "disabled": "{agent} 已在 Agents 管理中停用，請先啟用後再連線。",
@@ -1195,7 +1202,7 @@
         "streaming": "生成中",
         "elapsedMinutes": "{value} 分鐘",
         "elapsedSeconds": "{value} 秒",
-        "toolUseCount": "{count} 次工具呼叫"
+        "toolUseCount": "{count} 个工具 {count, plural, one {use} other {uses}}"
       },
       "tool": {
         "parameters": "參數",
@@ -1243,14 +1250,14 @@
         "nameLabel": "名稱：",
         "field": {
           "file": "檔案",
-          "notebook": "Notebook",
+          "notebook": "筆記本",
           "command": "命令",
           "old": "舊內容",
           "new": "新內容",
           "pattern": "模式",
           "path": "路徑",
           "query": "查詢",
-          "url": "URL",
+          "url": "URL 位址",
           "description": "描述",
           "content": "內容",
           "source": "來源內容",

@@ -1,9 +1,16 @@
 {
   "Language": {
     "followSystem": "跟随系统",
-    "english": "English",
+    "english": "英语",
     "simplifiedChinese": "简体中文",
-    "traditionalChinese": "繁體中文"
+    "traditionalChinese": "繁體中文",
+    "japanese": "日语",
+    "korean": "韩语",
+    "spanish": "西班牙语",
+    "german": "德语",
+    "french": "法语",
+    "portuguese": "葡萄牙语",
+    "arabic": "阿拉伯语"
   },
   "WelcomePage": {
     "title": "欢迎使用Codeg",
@@ -74,7 +81,7 @@
     "resolvedTheme": {
       "light": "浅色",
       "dark": "深色",
-      "unknown": "--"
+      "unknown": "未知"
     }
   },
   "SystemSettings": {
@@ -193,7 +200,7 @@
     "emptySkills": "暂无 Skill，可点击“新建 Skill”。",
     "newSkillTitle": "新建 Skill",
     "skillInfo": "Skill 信息",
-    "skillIdPlaceholder": "skill-id (letters/numbers/-/_/.)",
+    "skillIdPlaceholder": "Skill ID（例如：my-skill）",
     "skillsDirectoryWithPath": "Skills目录：{path}",
     "skillsDirectoryNeedId": "Skills目录：请输入 Skill ID 以生成完整路径",
     "markdownContent": "Markdown 内容",
@@ -318,20 +325,20 @@
       "empty": "暂无 MCP 结果。",
       "loadingDetail": "加载市场详情...",
       "detailLoadFailed": "加载详情失败：{message}",
-      "owner": "Owner: {owner}",
-      "namespace": "Namespace: {namespace}",
+      "owner": "所有者：{owner}",
+      "namespace": "命名空间：{namespace}",
       "defaultInstallProtocol": "默认安装协议",
       "currentOptionParameterCount": "当前选项参数数：{count}",
       "installConfigDescription": "安装配置(JSON，可修改后安装；修改后将覆盖协议/参数表单)",
       "selectLeftToView": "请选择左侧市场 MCP 查看详情。"
     },
     "badges": {
-      "verified": "Verified",
-      "remote": "Remote",
-      "hasHomepage": "Has Homepage",
-      "uses": "{count} uses",
-      "deployed": "Deployed",
-      "notDeployed": "Not Deployed"
+      "verified": "已验证",
+      "remote": "远程",
+      "hasHomepage": "有主页",
+      "uses": "{count} 次使用",
+      "deployed": "已部署",
+      "notDeployed": "未部署"
     },
     "selectLeftMcp": "请选择左侧 MCP。"
   },
@@ -625,8 +632,8 @@
         "prompting": "响应中...",
         "error": "连接异常",
         "disconnected": "未连接",
-        "tooltip": "{agent} - {status}",
-        "tooltipError": "{agent} - {error}"
+        "tooltip": "{agent}：{status}",
+        "tooltipError": "{agent}：{error}"
       },
       "tasks": {
         "title": "任务"
@@ -653,10 +660,10 @@
     },
     "auxPanel": {
       "tabs": {
-        "diff": "Diff",
-        "files": "Files",
-        "changes": "Changes",
-        "commits": "Commits"
+        "diff": "差异",
+        "files": "文件",
+        "changes": "变更",
+        "commits": "提交"
       }
     },
     "windowControls": {
@@ -712,7 +719,7 @@
       "fileCount": "{count} 个文件",
       "openFileOrDiff": "从右侧面板打开文件或差异",
       "disk": "磁盘",
-      "head": "HEAD",
+      "head": "HEAD（当前提交）",
       "unsaved": "未保存",
       "workingTree": "工作区",
       "loading": "加载中...",
@@ -817,7 +824,7 @@
         "addToVcs": "添加到 VCS"
       },
       "aria": {
-        "selectFile": "{action} {path}",
+        "selectFile": "{action}：{path}",
         "unselectAllFiles": "取消选择全部文件",
         "selectAllFiles": "选择全部文件",
         "unselectTracked": "取消选择已跟踪改动",
@@ -833,13 +840,13 @@
       "commitMessage": "提交消息",
       "commitMessagePlaceholder": "输入提交信息...",
       "commitButton": "提交 ({count})",
-      "head": "HEAD",
-      "workingTree": "Working Tree",
+      "head": "HEAD（当前提交）",
+      "workingTree": "工作区",
       "clickFileToDiff": "点击文件名查看差异",
       "loadingDiff": "加载差异..."
     },
     "gitLogTab": {
-      "filesTitle": "Files",
+      "filesTitle": "文件",
       "expandAllFiles": "展开全部文件",
       "collapseAllFiles": "折叠全部文件",
       "workspace": "工作区",
@@ -953,7 +960,7 @@
         "addToVcs": "添加到 VCS"
       },
       "aria": {
-        "selectPath": "{action} {path}"
+        "selectPath": "{action}：{path}"
       },
       "toasts": {
         "openDirectoryFailed": "打开目录失败",
@@ -978,8 +985,8 @@
         "renameDirectory": "重命名目录",
         "renameFile": "重命名文件",
         "description": "输入新的名称（仅名称，不含路径）。",
-        "placeholderDirectory": "new-folder-name",
-        "placeholderFile": "new-file-name.ext"
+        "placeholderDirectory": "新建文件夹名称",
+        "placeholderFile": "新建文件名称.ext"
       },
       "directoryDialog": {
         "descriptionAdd": "选择目录 {path} 下要添加到 VCS 的文件。",
@@ -1059,13 +1066,13 @@
       "noDiffOutput": "无差异输出。",
       "diffTitleWorkspace": "Diff · 工作区",
       "diffDescriptionWorkingTree": "工作区变更（HEAD）",
-      "diffTitleFile": "Diff · {name}",
+      "diffTitleFile": "差异 · {name}",
       "compareTitleFile": "比较 · {name}",
       "compareTitleBranch": "比较 · {branch}",
       "compareDescriptionPath": "{path} · 与 {branch} 比较",
       "compareDescriptionBranch": "与 {branch} 比较",
-      "diffTitleCommitFile": "Diff · {name} @ {hash}",
-      "diffTitleCommit": "Diff · {hash}",
+      "diffTitleCommitFile": "差异 · {name} @ {hash}",
+      "diffTitleCommit": "差异 · {hash}",
       "diffDescriptionCommitPath": "{path} · 提交 {commit}",
       "diffDescriptionCommit": "提交 {commit}",
       "diffTitleConflictFile": "冲突 · {name}",
@@ -1078,7 +1085,7 @@
           "retry": "重试"
         },
         "agentsSetupHint": "点击前往设置 > Agents 管理安装。",
-        "withSetupHint": "{message}\n{hint}",
+        "withSetupHint": "{message}\n提示：{hint}",
         "blocked": {
           "missingConfig": "无法读取当前 Agent 配置。",
           "disabled": "{agent} 已在 Agents 管理中禁用，请先启用后再连接。",
@@ -1195,7 +1202,7 @@
         "streaming": "生成中",
         "elapsedMinutes": "{value} 分钟",
         "elapsedSeconds": "{value} 秒",
-        "toolUseCount": "{count} 次工具调用"
+        "toolUseCount": "{count} 个工具 {count, plural, one {use} other {uses}}"
       },
       "tool": {
         "parameters": "参数",
@@ -1243,14 +1250,14 @@
         "nameLabel": "名称：",
         "field": {
           "file": "文件",
-          "notebook": "Notebook",
+          "notebook": "笔记本",
           "command": "命令",
           "old": "旧内容",
           "new": "新内容",
           "pattern": "模式",
           "path": "路径",
           "query": "查询",
-          "url": "URL",
+          "url": "URL地址",
           "description": "描述",
           "content": "内容",
           "source": "源内容",

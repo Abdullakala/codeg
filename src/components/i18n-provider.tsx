@@ -239,6 +239,7 @@ export function AppI18nProvider({
 
   useEffect(() => {
     document.documentElement.lang = activeIntlLocale
+    document.documentElement.dir = activeIntlLocale === "ar" ? "rtl" : "ltr"
   }, [activeIntlLocale])
 
   const contextValue = useMemo<AppI18nContextValue>(

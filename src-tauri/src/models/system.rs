@@ -13,6 +13,13 @@ pub enum AppLocale {
     En,
     ZhCn,
     ZhTw,
+    Ja,
+    Ko,
+    Es,
+    De,
+    Fr,
+    Pt,
+    Ar,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]

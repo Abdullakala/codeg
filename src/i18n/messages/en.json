@@ -3,7 +3,14 @@
     "followSystem": "Follow System",
     "english": "English",
     "simplifiedChinese": "Simplified Chinese",
-    "traditionalChinese": "Traditional Chinese"
+    "traditionalChinese": "Traditional Chinese",
+    "japanese": "Japanese",
+    "korean": "Korean",
+    "spanish": "Spanish",
+    "german": "German",
+    "french": "French",
+    "portuguese": "Portuguese",
+    "arabic": "Arabic"
   },
   "WelcomePage": {
     "title": "Welcome to Codeg",
