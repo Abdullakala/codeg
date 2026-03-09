@@ -103,6 +103,30 @@ export function SystemNetworkSettings() {
     }).format(lastCheckedAt)
   }, [lastCheckedAt, locale])
 
+  const formattedUpdateDate = useMemo(() => {
+    if (!availableUpdate?.date) return null
+
+    const parsed = new Date(availableUpdate.date)
+    if (Number.isNaN(parsed.getTime())) return availableUpdate.date
+
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: "medium",
+    }).format(parsed)
+  }, [availableUpdate?.date, locale])
+
+  const updateNotes = useMemo(
+    () => availableUpdate?.body?.trim() || t("none"),
+    [availableUpdate?.body, t]
+  )
+
+  const updateStatusMessage = useMemo(() => {
+    if (checkingUpdate) return t("checking")
+    if (installingUpdate) return t("updating")
+    if (availableUpdate) return null
+    if (lastCheckedAt) return t("alreadyLatest")
+    return null
+  }, [availableUpdate, checkingUpdate, installingUpdate, lastCheckedAt, t])
+
   const loadSettings = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
@@ -220,10 +244,8 @@ export function SystemNetworkSettings() {
 
       if (result.update) {
         setAvailableUpdate(result.update)
-        toast.success(t("foundUpdate", { version: result.update.version }))
       } else {
         setAvailableUpdate(null)
-        toast.success(t("alreadyLatest"))
       }
 
       if (previousUpdate && previousUpdate !== result.update) {
@@ -408,82 +430,89 @@ export function SystemNetworkSettings() {
             {t("updateDescription")}
           </p>
 
-          <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-            <div className="rounded-md border bg-muted/20 px-3 py-2">
-              <div className="text-muted-foreground">{t("currentVersion")}</div>
-              <div className="mt-1 font-medium">
+          <div className="rounded-md border bg-muted/20 px-3 py-3 text-xs space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-muted-foreground">
+                {t("currentVersion")}：
                 {currentVersion ? `v${currentVersion}` : "-"}
-              </div>
+              </p>
+              {checkingUpdate ? (
+                <Button
+                  key="checking-update"
+                  size="sm"
+                  disabled
+                  aria-busy="true"
+                  className="w-[9.5rem] justify-center transition-none"
+                >
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t("checking")}
+                </Button>
+              ) : availableUpdate ? (
+                <Button
+                  size="sm"
+                  onClick={installUpdate}
+                  disabled={installingUpdate}
+                >
+                  {installingUpdate ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      {t("updating")}
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUpCircle className="h-3.5 w-3.5" />
+                      {t("upgradeTo", { version: availableUpdate.version })}
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  key="check-update"
+                  size="sm"
+                  onClick={checkForUpdates}
+                  disabled={installingUpdate}
+                  className="w-[9.5rem] justify-center transition-none"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  {t("checkUpdate")}
+                </Button>
+              )}
             </div>
-            <div className="rounded-md border bg-muted/20 px-3 py-2">
-              <div className="text-muted-foreground">
-                {t("upgradableVersion")}
-              </div>
-              <div className="mt-1 font-medium">
-                {availableUpdate ? `v${availableUpdate.version}` : t("none")}
-              </div>
-            </div>
-          </div>
 
-          {formattedLastCheckedAt && (
-            <p className="text-[11px] text-muted-foreground">
-              {t("lastChecked", { time: formattedLastCheckedAt })}
-            </p>
-          )}
+            {!availableUpdate && formattedLastCheckedAt && (
+              <p className="text-muted-foreground">
+                {t("lastChecked", { time: formattedLastCheckedAt })}
+              </p>
+            )}
+
+            {updateStatusMessage && (
+              <p className="text-muted-foreground">{updateStatusMessage}</p>
+            )}
+
+            {availableUpdate && (
+              <div className="space-y-2 pt-2 border-t border-border/70">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">
+                    {t("upgradableVersion")}：v{availableUpdate.version}
+                  </span>
+                  {formattedUpdateDate && (
+                    <span className="text-muted-foreground text-[11px]">
+                      {formattedUpdateDate}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 max-h-28 overflow-auto rounded-md border bg-background/70 px-3 py-3 leading-6 whitespace-pre-wrap break-words text-muted-foreground">
+                  {updateNotes}
+                </div>
+              </div>
+            )}
+          </div>
 
           {updateError && (
             <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400">
               {t("updateError", { message: updateError })}
             </div>
           )}
-
-          <div className="flex flex-wrap items-center gap-2 justify-end">
-            {checkingUpdate ? (
-              <Button
-                key="checking-update"
-                size="sm"
-                variant="secondary"
-                disabled
-                aria-busy="true"
-                className="w-[9.5rem] justify-center transition-none"
-              >
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t("checking")}
-              </Button>
-            ) : (
-              <Button
-                key="check-update"
-                size="sm"
-                variant="secondary"
-                onClick={checkForUpdates}
-                disabled={installingUpdate}
-                className="w-[9.5rem] justify-center transition-none"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                {t("checkUpdate")}
-              </Button>
-            )}
-
-            {availableUpdate && (
-              <Button
-                size="sm"
-                onClick={installUpdate}
-                disabled={installingUpdate || checkingUpdate}
-              >
-                {installingUpdate ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    {t("updating")}
-                  </>
-                ) : (
-                  <>
-                    <ArrowUpCircle className="h-3.5 w-3.5" />
-                    {t("upgradeTo", { version: availableUpdate.version })}
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
         </section>
       </div>
     </div>

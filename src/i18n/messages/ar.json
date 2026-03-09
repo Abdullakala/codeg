@@ -107,7 +107,7 @@
     "updateTitle": "تحديث التطبيق",
     "updateDescription": "تحقق من المصدر المهيأ للإصدارات الأحدث وثبّت التحديث مباشرة عند توفره.",
     "currentVersion": "الإصدار الحالي",
-    "upgradableVersion": "الإصدار المتاح",
+    "upgradableVersion": "أحدث إصدار",
     "none": "لا يوجد",
     "lastChecked": "آخر فحص: {time}",
     "updateError": "خطأ في التحديث: {message}",

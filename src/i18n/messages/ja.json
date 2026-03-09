@@ -107,7 +107,7 @@
     "updateTitle": "アプリ更新",
     "updateDescription": "設定されたリリースソースで新しいバージョンを確認し、利用可能なら直接インストールします。",
     "currentVersion": "現在のバージョン",
-    "upgradableVersion": "利用可能なバージョン",
+    "upgradableVersion": "最新バージョン",
     "none": "なし",
     "lastChecked": "最終確認: {time}",
     "updateError": "更新エラー: {message}",

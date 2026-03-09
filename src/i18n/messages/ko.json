@@ -107,7 +107,7 @@
     "updateTitle": "앱 업데이트",
     "updateDescription": "설정된 릴리스 소스에서 새 버전을 확인하고 가능하면 바로 설치합니다.",
     "currentVersion": "현재 버전",
-    "upgradableVersion": "사용 가능한 버전",
+    "upgradableVersion": "최신 버전",
     "none": "없음",
     "lastChecked": "마지막 확인: {time}",
     "updateError": "업데이트 오류: {message}",

@@ -107,7 +107,7 @@
     "updateTitle": "Mise à jour de l’app",
     "updateDescription": "Vérifiez les nouvelles versions depuis la source de publication configurée et installez-les directement si disponibles.",
     "currentVersion": "Version actuelle",
-    "upgradableVersion": "Version disponible",
+    "upgradableVersion": "Dernière version",
     "none": "Aucune",
     "lastChecked": "Dernière vérification : {time}",
     "updateError": "Erreur de mise à jour : {message}",

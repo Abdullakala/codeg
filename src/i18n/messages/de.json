@@ -107,7 +107,7 @@
     "updateTitle": "App-Update",
     "updateDescription": "Prüft die konfigurierte Release-Quelle auf neue Versionen und installiert sie bei Verfügbarkeit direkt.",
     "currentVersion": "Aktuelle Version",
-    "upgradableVersion": "Verfügbare Version",
+    "upgradableVersion": "Neueste Version",
     "none": "Keine",
     "lastChecked": "Zuletzt geprüft: {time}",
     "updateError": "Update-Fehler: {message}",
