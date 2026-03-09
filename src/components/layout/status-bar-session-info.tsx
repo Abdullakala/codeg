@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { MessageSquare, GitBranch } from "lucide-react"
+import { GitBranch } from "lucide-react"
 import { useTabContext } from "@/contexts/tab-context"
 import { useFolderContext } from "@/contexts/folder-context"
 
