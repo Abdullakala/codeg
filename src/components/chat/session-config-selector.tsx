@@ -39,11 +39,11 @@ export function SessionConfigSelector({
         <Button
           variant="ghost"
           size="xs"
-          className={cn("gap-1 shrink-0", isActive && "text-primary")}
+          className={cn("gap-1 min-w-0", isActive && "text-primary")}
           title={option.description ?? option.name}
         >
-          {label}
-          <ChevronUp className="size-3" />
+          <span className="truncate">{label}</span>
+          <ChevronUp className="size-3 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="min-w-72">

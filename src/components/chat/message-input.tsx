@@ -7,8 +7,9 @@ import { open } from "@tauri-apps/plugin-dialog"
 import Image from "next/image"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Textarea } from "@/components/ui/textarea"
-import { FileSearch, Plus, Send, Square, X } from "lucide-react"
+import { Ellipsis, FileSearch, Plus, Send, Square, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { readFileBase64 } from "@/lib/tauri"
 import { disposeTauriListener } from "@/lib/tauri-listener"
@@ -327,6 +328,8 @@ export function MessageInput({
     hasModes && Boolean(effectiveModeId) && !hasConfigOptions
   const showModeLoading = modeLoading && !hasConfigOptions && !showModeSelector
   const showConfigLoading = configOptionsLoading && !hasConfigOptions
+  const hasAnySelector =
+    showConfigLoading || hasConfigOptions || showModeLoading || showModeSelector
   const imageAttachments = useMemo(
     () =>
       attachments.filter(
@@ -996,6 +999,32 @@ export function MessageInput({
   const bottomPaddingClass = "pb-10"
   const showDragActive = isDragActive && !disabled && !isPrompting
 
+  const selectorItems = (
+    <>
+      {showConfigLoading && (
+        <SelectorLoadingChip label={t("loadingSettings")} />
+      )}
+      {hasConfigOptions &&
+        availableConfigOptions.map((option) => (
+          <SessionConfigSelector
+            key={option.id}
+            option={option}
+            onSelect={(configId, valueId) =>
+              onConfigOptionChange?.(configId, valueId)
+            }
+          />
+        ))}
+      {showModeLoading && <SelectorLoadingChip label={t("loadingMode")} />}
+      {showModeSelector && (
+        <ModeSelector
+          modes={availableModes}
+          selectedModeId={effectiveModeId!}
+          onSelect={handleModeSelect}
+        />
+      )}
+    </>
+  )
+
   return (
     <div
       ref={containerRef}
@@ -1091,8 +1120,8 @@ export function MessageInput({
           {t("dropFilesToAttach")}
         </div>
       )}
-      <div className="absolute left-2 right-24 bottom-2 flex flex-col gap-1">
-        <div className="flex items-center gap-1 overflow-x-auto">
+      <div className="@container absolute left-2 right-24 bottom-2">
+        <div className="flex items-center gap-1">
           <Button
             onClick={handlePickFiles}
             disabled={disabled || isPrompting}
@@ -1103,26 +1132,29 @@ export function MessageInput({
           >
             <Plus className="size-4" />
           </Button>
-          {showConfigLoading && (
-            <SelectorLoadingChip label={t("loadingSettings")} />
-          )}
-          {hasConfigOptions &&
-            availableConfigOptions.map((option) => (
-              <SessionConfigSelector
-                key={option.id}
-                option={option}
-                onSelect={(configId, valueId) =>
-                  onConfigOptionChange?.(configId, valueId)
-                }
-              />
-            ))}
-          {showModeLoading && <SelectorLoadingChip label={t("loadingMode")} />}
-          {showModeSelector && effectiveModeId && (
-            <ModeSelector
-              modes={availableModes}
-              selectedModeId={effectiveModeId}
-              onSelect={handleModeSelect}
-            />
+          {/* 宽屏内联显示，窄屏（<300px）通过"更多"气泡显示 */}
+          <div className="hidden @[300px]:contents">
+            {selectorItems}
+          </div>
+          {hasAnySelector && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0 @[300px]:hidden"
+                >
+                  <Ellipsis className="size-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                side="top"
+                align="start"
+                className="flex w-auto flex-col gap-1 rounded-xl p-1"
+              >
+                {selectorItems}
+              </PopoverContent>
+            </Popover>
           )}
         </div>
       </div>
